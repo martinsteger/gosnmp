@@ -53,7 +53,7 @@ type SnmpV3SecurityParameters interface {
 	getDefaultContextEngineID() string
 	setSecurityParameters(in SnmpV3SecurityParameters) error
 	marshal(flags SnmpV3MsgFlags) ([]byte, error)
-	unmarshal(flags SnmpV3MsgFlags, packet []byte, cursor int) (int, error)
+	unmarshal(x *GoSNMP, flags SnmpV3MsgFlags, packet []byte, cursor int) (int, error)
 	authenticate(packet []byte) error
 	isAuthentic(packetBytes []byte, packet *SnmpPacket) (bool, error)
 	encryptPacket(scopedPdu []byte) ([]byte, error)
@@ -65,11 +65,13 @@ func (x *GoSNMP) validateParametersV3() error {
 	if x.SecurityModel != UserSecurityModel {
 		return errors.New("the SNMPV3 User Security Model is the only SNMPV3 security model currently implemented")
 	}
-	if x.SecurityParameters == nil {
-		return errors.New("SNMPV3 SecurityParameters must be set")
+	if x.SecurityParameters == nil && x.UpdateSecurityParameters == nil {
+		return errors.New("SNMPV3 SecurityParameters or UpdateSecrets callback must be set")
 	}
-
-	return x.SecurityParameters.validate(x.MsgFlags)
+	if x.SecurityParameters != nil {
+		return x.SecurityParameters.validate(x.MsgFlags)
+	}
+	return nil
 }
 
 // authenticate the marshalled result of a snmp version 3 packet
@@ -425,7 +427,7 @@ func (x *GoSNMP) unmarshalV3Header(packet []byte,
 		response.SecurityParameters = &UsmSecurityParameters{Logger: x.Logger}
 	}
 
-	cursor, err = response.SecurityParameters.unmarshal(response.MsgFlags, packet, cursor)
+	cursor, err = response.SecurityParameters.unmarshal(x, response.MsgFlags, packet, cursor)
 	if err != nil {
 		return 0, err
 	}

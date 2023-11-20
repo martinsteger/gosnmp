@@ -167,6 +167,9 @@ type GoSNMP struct {
 
 	// Internal - we use to send packets if using unconnected socket.
 	uaddr *net.UDPAddr
+
+	// UpdateSecurityParameters propagates the secrets to decrypt and authenticate a received SNMP packet to the security model of the received packet.
+	UpdateSecurityParameters func(SnmpV3SecurityParameters) error
 }
 
 // Default connection settings
@@ -375,7 +378,9 @@ func (x *GoSNMP) validateParameters() error {
 		if err != nil {
 			return err
 		}
-		err = x.SecurityParameters.init(x.Logger)
+		if x.SecurityParameters != nil {
+			err = x.SecurityParameters.init(x.Logger)
+		}
 		if err != nil {
 			return err
 		}
@@ -559,6 +564,23 @@ func (x *GoSNMP) SnmpDecodePacket(resp []byte) (*SnmpPacket, error) {
 	if err != nil {
 		err = fmt.Errorf("unable to decode packet body: %w", err)
 		return result, err
+	}
+
+	if result.Version == Version3 {
+		// Authenticate SNMPv3 packets unless authentication is disabled in the USM
+		usm, err := castUsmSecParams(result.SecurityParameters)
+		if err != nil {
+			return result, err
+		}
+		if usm.AuthenticationProtocol != NoAuth {
+			authentic, err := usm.isAuthentic(resp, result)
+			if err != nil {
+				return result, err
+			}
+			if !authentic {
+				return result, ErrWrongDigest
+			}
+		}
 	}
 
 	return result, nil

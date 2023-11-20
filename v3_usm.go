@@ -25,6 +25,7 @@ import (
 	"errors"
 	"fmt"
 	"hash"
+	"slices"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -776,16 +777,16 @@ func (sp *UsmSecurityParameters) isAuthentic(packetBytes []byte, packet *SnmpPac
 	if packetSecParams, err = castUsmSecParams(packet.SecurityParameters); err != nil {
 		return false, err
 	}
+
 	// TODO: investigate call chain to determine if this is really the best spot for this
 	if msgDigest, err = calcPacketDigest(packetBytes, packetSecParams); err != nil {
 		return false, err
 	}
 
-	for k, v := range []byte(packetSecParams.AuthenticationParameters) {
-		if msgDigest[k] != v {
-			return false, nil
-		}
+	if !slices.Equal(msgDigest, []byte(packetSecParams.AuthenticationParameters)) {
+		return false, nil
 	}
+
 	return true, nil
 }
 
@@ -950,7 +951,7 @@ func (sp *UsmSecurityParameters) marshal(flags SnmpV3MsgFlags) ([]byte, error) {
 	return tmpseq, nil
 }
 
-func (sp *UsmSecurityParameters) unmarshal(flags SnmpV3MsgFlags, packet []byte, cursor int) (int, error) {
+func (sp *UsmSecurityParameters) unmarshal(x *GoSNMP, flags SnmpV3MsgFlags, packet []byte, cursor int) (int, error) {
 	var err error
 
 	if cursor >= len(packet) {
@@ -979,11 +980,12 @@ func (sp *UsmSecurityParameters) unmarshal(flags SnmpV3MsgFlags, packet []byte, 
 			sp.AuthoritativeEngineID = AuthoritativeEngineID
 			sp.SecretKey = nil
 			sp.PrivacyKey = nil
-
 			sp.Logger.Printf("Parsed authoritativeEngineID %0x", []byte(AuthoritativeEngineID))
-			err = sp.initSecurityKeysNoLock()
-			if err != nil {
-				return 0, err
+			if x.UpdateSecurityParameters == nil {
+				err = sp.initSecurityKeysNoLock()
+				if err != nil {
+					return 0, err
+				}
 			}
 		}
 	}
@@ -1016,6 +1018,12 @@ func (sp *UsmSecurityParameters) unmarshal(flags SnmpV3MsgFlags, packet []byte, 
 	if msgUserName, ok := rawMsgUserName.(string); ok {
 		sp.UserName = msgUserName
 		sp.Logger.Printf("Parsed userName %s", msgUserName)
+		if x.UpdateSecurityParameters != nil {
+			err = x.UpdateSecurityParameters(sp)
+			if err != nil {
+				return 0, err
+			}
+		}
 	}
 
 	rawMsgAuthParameters, count, err := parseRawField(sp.Logger, packet[cursor:], "msgAuthenticationParameters")
