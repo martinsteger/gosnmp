@@ -554,19 +554,11 @@ func (x *GoSNMP) SnmpDecodePacket(resp []byte) (*SnmpPacket, error) {
 	}
 
 	if result.Version == Version3 {
-		resp, cursor, err = x.decryptPacket(resp, cursor, result)
+
+		err = x.UpdateSecurityParameters(result.SecurityParameters)
 		if err != nil {
 			return result, err
 		}
-	}
-
-	err = x.unmarshalPayload(resp, cursor, result)
-	if err != nil {
-		err = fmt.Errorf("unable to decode packet body: %w", err)
-		return result, err
-	}
-
-	if result.Version == Version3 {
 		// Authenticate SNMPv3 packets unless authentication is disabled in the USM
 		usm, err := castUsmSecParams(result.SecurityParameters)
 		if err != nil {
@@ -581,6 +573,17 @@ func (x *GoSNMP) SnmpDecodePacket(resp []byte) (*SnmpPacket, error) {
 				return result, ErrWrongDigest
 			}
 		}
+		// Decrypt authentic packet
+		resp, cursor, err = x.decryptPacket(resp, cursor, result)
+		if err != nil {
+			return result, err
+		}
+	}
+
+	err = x.unmarshalPayload(resp, cursor, result)
+	if err != nil {
+		err = fmt.Errorf("unable to decode packet body: %w", err)
+		return result, err
 	}
 
 	return result, nil
