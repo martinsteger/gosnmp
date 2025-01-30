@@ -169,7 +169,7 @@ type GoSNMP struct {
 	uaddr *net.UDPAddr
 
 	// UpdateSecurityParameters propagates the secrets to decrypt and authenticate a received SNMP packet to the security model of the received packet.
-	UpdateSecurityParameters func(SnmpV3SecurityParameters) error
+	UpdateSecurityParameters func(SnmpV3MsgFlags, SnmpV3SecurityParameters) error
 }
 
 // Default connection settings
@@ -555,7 +555,7 @@ func (x *GoSNMP) SnmpDecodePacket(resp []byte) (*SnmpPacket, error) {
 
 	if result.Version == Version3 {
 
-		err = x.UpdateSecurityParameters(result.SecurityParameters)
+		err = x.UpdateSecurityParameters(result.MsgFlags, result.SecurityParameters)
 		if err != nil {
 			return result, err
 		}

@@ -1019,7 +1019,7 @@ func (sp *UsmSecurityParameters) unmarshal(x *GoSNMP, flags SnmpV3MsgFlags, pack
 		sp.UserName = msgUserName
 		sp.Logger.Printf("Parsed userName %s", msgUserName)
 		if x.UpdateSecurityParameters != nil {
-			err = x.UpdateSecurityParameters(sp)
+			err = x.UpdateSecurityParameters(flags, sp)
 			if err != nil {
 				return 0, err
 			}
